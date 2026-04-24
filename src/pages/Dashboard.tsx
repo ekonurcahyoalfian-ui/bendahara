@@ -13,17 +13,28 @@ export default function Dashboard({ currentUser, onNavigate }: Props) {
   const bulanIni = now.getMonth() + 1;
   const tahunIni = now.getFullYear();
 
+  const isWali = currentUser.role === 'wali';
+
   const data = useMemo(() => {
     const pembayaranList = allPembayaran.filter(p => !p.dibatalkan);
+
+    // ── Filter khusus wali: hanya data siswa miliknya ──
+    const mySiswaId = currentUser.studentId;
+    const myTagihan = isWali && mySiswaId
+      ? tagihanList.filter(t => t.siswaId === mySiswaId)
+      : tagihanList;
+    const myPembayaran = isWali && mySiswaId
+      ? pembayaranList.filter(p => p.siswaId === mySiswaId)
+      : pembayaranList;
 
     const totalSiswaAktif = siswaList.filter(s => s.status === 'aktif').length;
 
     // Total tagihan bulan ini
-    const tagihanBulanIni = tagihanList.filter(t => t.bulan === bulanIni && t.tahun === tahunIni);
+    const tagihanBulanIni = myTagihan.filter(t => t.bulan === bulanIni && t.tahun === tahunIni);
     const totalTagihanBulanIni = tagihanBulanIni.reduce((s, t) => s + (t.nominal - t.diskon), 0);
 
     // Total pembayaran bulan ini
-    const pembayaranBulanIni = pembayaranList.filter(p => {
+    const pembayaranBulanIni = myPembayaran.filter(p => {
       const d = new Date(p.tanggal);
       return d.getMonth() + 1 === bulanIni && d.getFullYear() === tahunIni;
     });
@@ -45,10 +56,9 @@ export default function Dashboard({ currentUser, onNavigate }: Props) {
 
     // Tunggakan: tagihan belum lunas
     let totalTunggakan = 0;
-    let siswaTunggakan = 0;
     const siswaTunggakanSet = new Set<string>();
 
-    tagihanList.forEach(t => {
+    myTagihan.forEach(t => {
       const dibayar = pembayaranList
         .filter(p => p.tagihanId === t.id)
         .reduce((s, p) => s + p.jumlah, 0);
@@ -58,10 +68,10 @@ export default function Dashboard({ currentUser, onNavigate }: Props) {
         siswaTunggakanSet.add(t.siswaId);
       }
     });
-    siswaTunggakan = siswaTunggakanSet.size;
+    const siswaTunggakan = siswaTunggakanSet.size;
 
     // Recent payments
-    const recentPayments = [...pembayaranList]
+    const recentPayments = [...myPembayaran]
       .sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime())
       .slice(0, 5)
       .map(p => {
@@ -77,9 +87,7 @@ export default function Dashboard({ currentUser, onNavigate }: Props) {
       siswaTunggakan, recentPayments,
       saldo: totalPembayaranBulanIni + totalPemasukanBulanIni - totalPengeluaranBulanIni,
     };
-  }, [allPembayaran, siswaList, tagihanList, pengeluaranList, pemasukanLainList, jenisTagihanList]);
-
-  const isWali = currentUser.role === 'wali';
+  }, [allPembayaran, siswaList, tagihanList, pengeluaranList, pemasukanLainList, jenisTagihanList, currentUser, isWali, bulanIni, tahunIni]);
 
   const cards = isWali ? [
     { label: 'Total Tagihan', value: formatRupiah(data.totalTagihanBulanIni), icon: <BookOpen size={20} />, color: 'bg-blue-500', sub: getNamaBulan(bulanIni) },
